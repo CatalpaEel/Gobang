@@ -3,6 +3,7 @@
 using namespace std;
 int n = 15;
 int board[20][20];
+
 void initboard()
 {
     for (int i = 1; i <= n; ++i)
@@ -13,102 +14,80 @@ void initboard()
         }
     }
 }
+
+bool is_in_board(int x, int y)
+{
+    return x >= 1 && x <= n && y >= 1 && y <= n;
+}
+
+enum Direction
+{
+    LEFT,       // 0
+    RIGHT,      // 1
+    UP,         // 2
+    DOWN,       // 3
+    LEFT_UP,    // 4
+    LEFT_DOWN,  // 5
+    RIGHT_UP,   // 6
+    RIGHT_DOWN, // 7
+};
+void find_adjacent(int x, int y, Direction dir, int *resx, int *resy)
+{
+    const int fx[8][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}, {-1, -1}, {1, -1}, {1, -1}, {1, 1}};
+    int color = board[x][y];
+    while (is_in_board(x, y) && board[x][y] == color)
+    {
+        x += fx[dir][0];
+        y += fx[dir][1];
+    }
+    *resx = x;
+    *resy = y;
+}
 int cal_row(int x, int y)
 {
-    int color = board[x][y];
-    if (color == -1)
+    if (board[x][y] == -1)
     {
         return 0;
     }
-    int cnt = 1;
-    for (int i = y + 1; i <= n; ++i)
-    {
-        if (board[x][i] == color)
-        {
-            ++cnt;
-        }
-    }
-    for (int i = y - 1; i >= 1; --i)
-    {
-        if (board[x][i] == color)
-        {
-            ++cnt;
-        }
-    }
-    return cnt;
+    int lx, ly, rx, ry;
+    find_adjacent(x, y, LEFT, &lx, &ly);
+    find_adjacent(x, y, RIGHT, &rx, &ry);
+    return ry - ly - 1;
 }
 int cal_col(int x, int y)
 {
-    int color = board[x][y];
-    if (color == -1)
+    if (board[x][y] == -1)
     {
         return 0;
     }
-    int cnt = 1;
-    for (int i = x + 1; i <= n; ++i)
-    {
-        if (board[i][y] == color)
-        {
-            ++cnt;
-        }
-    }
-    for (int i = x - 1; i >= 1; --i)
-    {
-        if (board[i][y] == color)
-        {
-            ++cnt;
-        }
-    }
-    return cnt;
+    int lx, ly, rx, ry;
+    find_adjacent(x, y, UP, &lx, &ly);
+    find_adjacent(x, y, DOWN, &rx, &ry);
+    return rx - lx - 1;
 }
 int cal_diag(int x, int y)
 {
-    int color = board[x][y];
-    if (color == -1)
+    if (board[x][y] == -1)
     {
         return 0;
     }
-    int cnt = 1;
-    for (int i = 1; x + i <= n && y + i <= n; ++i)
-    {
-        if (board[x + i][y + i] == color)
-        {
-            ++cnt;
-        }
-    }
-    for (int i = 1; x - i >= 1 && y - i >= 1; ++i)
-    {
-        if (board[x - i][y - i] == color)
-        {
-            ++cnt;
-        }
-    }
-    return cnt;
+    int lx, ly, rx, ry;
+    find_adjacent(x, y, LEFT_UP, &lx, &ly);
+    find_adjacent(x, y, RIGHT_DOWN, &rx, &ry);
+    return ry - ly - 1;
 }
 int cal_back_diag(int x, int y)
 {
-    int color = board[x][y];
-    if (color == -1)
+    if (board[x][y] == -1)
     {
         return 0;
     }
-    int cnt = 1;
-    for (int i = 1; x + i <= n && y - i >= 1; ++i)
-    {
-        if (board[x + i][y - i] == color)
-        {
-            ++cnt;
-        }
-    }
-    for (int i = 1; x - i >= 1 && y + i <= n; ++i)
-    {
-        if (board[x - i][y + i] == color)
-        {
-            ++cnt;
-        }
-    }
-    return cnt;
+    int lx, ly, rx, ry;
+    find_adjacent(x, y, LEFT_DOWN, &lx, &ly);
+    find_adjacent(x, y, RIGHT_UP, &rx, &ry);
+    return ry - ly - 1;
 }
+
 bool checkwin()
 {
     for (int i = 1; i <= n; ++i)
@@ -135,9 +114,10 @@ bool checkwin()
     }
     return false;
 }
+
 bool canput(int x, int y)
 {
-    return x >= 1 && x <= n && y >= 1 && y <= n && board[x][y] == -1;
+    return is_in_board(x, y) && board[x][y] == -1;
 }
 bool checkban(int x, int y)
 {
@@ -179,7 +159,7 @@ bool go(int opt, int color)
 }
 void printboard()
 {
-    //1 system("clear");
+    // 1 system("clear");
     for (int i = 1; i <= n; ++i)
     {
         for (int j = 1; j <= n; ++j)
