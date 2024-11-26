@@ -136,44 +136,49 @@ public:
         return false;
     }
 
-    // If (x,y) is banned, return true, which means that the black loses the game.
-    bool checkban(int x, int y)
+    // If it is banned, return true, which means that the black loses the game.
+    bool checkban()
     {
-        const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
+        const Direction fx[4] = {RIGHT, DOWN, RIGHT_DOWN, RIGHT_UP};//to avoid repetition
         int cnt = 0;
-        for (int i = 0; i < 4; ++i)
+        for (int i = 1; i <= n; ++i)
         {
-            int lx, ly, rx, ry;
-            find_adjacent(x, y, fx[i][0], &lx, &ly);
-            find_adjacent(x, y, fx[i][1], &rx, &ry);
-            int len = ry - ly - 1;
-            if (i == 1)
+            for (int j = 1; j <= n; ++j)
             {
-                len = rx - lx - 1;
-            }
-            if (len >= 6)
-            {
-                return true;
-            }
-            else if (len == 4 && (canput(lx, ly) || canput(rx, ry)))
-            {
-                ++cnt;
-            }
-            else if (len == 3 && canput(lx, ly) && canput(rx, ry))
-            {
-                ++cnt;
+                if (board[i][j] != 1)
+                {
+                    continue;
+                }
+                for (int k = 0; k < 4; ++k)
+                {
+                    int x, y;
+                    find_adjacent(i, j, fx[k], &x, &y);
+                    int len = y - j - 1;
+                    if (i == 1)
+                    {
+                        len = x - i - 1;
+                    }
+                    if (len >= 6)
+                    {
+                        return true;
+                    }
+                    else if (len == 4 && (canput(i-1, j-1) || canput(x, y)))
+                    {
+                        ++cnt;
+                    }
+                    else if (len == 3 && canput(i-1, j-1) && canput(x, y))
+                    {
+                        ++cnt;
+                    }
+                }
             }
         }
-        if (cnt >= 2)
-        {
-            return true;
-        }
-        return false;
+        return cnt >= 2;
     }
 
     void printboard()
     {
-       cout<<"--------------------------"<<endl;
+        cout << "--------------------------" << endl;
         for (int i = 1; i <= n; ++i)
         {
             for (int j = 1; j <= n; ++j)
@@ -434,75 +439,6 @@ public:
     }
 };
 
-/*
-class MINMAX_TREE
-{
-private:
-    int color;
-    const int max_dep = 5;
-
-    NODE *root;
-    void dfs(NODE *u, int dep, bool is_max)
-    {
-        if (dep == max_dep)
-        {
-            u->evaluate();
-            return;
-        }
-        for (int i = 1; i <= n; ++i)
-        {
-            for (int j = 1; j <= n; ++j)
-            {
-                if (canput(i, j, u->board))
-                {
-                    NODE *child = new NODE();
-                    copy_board(u->board, child->board);
-                    child->board[i][j] = color ^ is_max;
-                    u->add_child(child);
-                    dfs(child, dep + 1, is_max ^ 1);
-                }
-            }
-        }
-    }
-
-    bool canput(int x, int y, int board[][n + 1])
-    {
-        return is_in_board(x, y) && board[x][y] == -1;
-    }
-    void copy_board(int old_board[][n + 1], int new_board[][n + 1])
-    {
-        for (int i = 1; i <= n; ++i)
-        {
-            for (int j = 1; j <= n; ++j)
-            {
-                new_board[i][j] = old_board[i][j];
-            }
-        }
-    }
-
-public:
-    void init(int color)
-    {
-        root = new NODE();
-        for (int i = 1; i <= n; ++i)
-        {
-            for (int j = 1; j <= n; ++j)
-            {
-                board[i][j] = -1;
-            }
-        }
-        this->color = color;
-        dfs(root, 1, true);
-    }
-    void get_next_position(int *x, int *y)
-    {
-    }
-    void update_board(int x, int y)
-    {
-    }
-} ;
-*/
-
 bool player_go(BOARD *board, int color)
 {
     int x = 0, y = 0;
@@ -512,7 +448,7 @@ bool player_go(BOARD *board, int color)
         cin >> x >> y;
     }
     board->board_put(x, y, color);
-    if (color && board->checkban(x, y))
+    if (color && board->checkban())
     {
         return false;
     }
@@ -571,7 +507,7 @@ void play()
     BOARD *board = new BOARD();
     NODE *node = new NODE(board);
     board->printboard();
-    int black = 0, white = black ^ 1;
+    int black = 1, white = black ^ 1;
     int cnt = 0;
     bool flag;
     while (!board->checkwin())
