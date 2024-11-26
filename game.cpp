@@ -368,20 +368,33 @@ int evaluate(BOARD *board)
     return sum;
 }
 
-int minmax(BOARD *board, int dep, int color, int &x, int &y)
+int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
 {
-    const int MAX_DEP = 3;
+    const int MAX_DEP = 4;
     const int INF = 1e8;
     if (dep == MAX_DEP)
     {
         return evaluate(board);
     }
-    int mx = color ? -INF : INF;
+    int alpha = INF, beta = -INF;
+    if (color)
+    {
+        alpha = front;
+    }
+    else
+    {
+        beta = front;
+    }
     x = 0, y = 0;
     for (int i = 1; i <= n; ++i)
     {
+
         for (int j = 1; j <= n; ++j)
         {
+            if (beta >= alpha)
+            {
+                break;
+            }
             if (board->canput(i, j))
             {
                 if (!x)
@@ -389,18 +402,46 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y)
                     x = i, y = j;
                 }
                 board->board_put(i, j, color);
-                int tx, ty;
-                int val = minmax(board, dep + 1, color ^ 1, tx, ty);
-                if (color && val > mx || !color && val < mx)
+                int tx, ty, val;
+                if (color) // max node
                 {
-                    mx = val;
-                    x = i, y = j;
+                    val = minmax(board, dep + 1, color ^ 1, tx, ty, beta);
+                    if (val > beta)
+                    {
+                        beta = val;
+                        x = i, y = j;
+                    }
+                }
+                else // min node
+                {
+                    val = minmax(board, dep + 1, color ^ 1, tx, ty, alpha);
+                    if (val < alpha)
+                    {
+                        alpha = val;
+                        x = i, y = j;
+                    }
                 }
                 board->board_put(i, j, -1);
             }
         }
+        if (beta >= alpha)
+        {
+            break;
+        }
     }
-    return mx;
+    return color ? beta : alpha;
+}
+
+bool computer_go(BOARD *board, int color)
+{
+    int x, y;
+    minmax(board, 1, color, x, y, color ? 1e8 : -1e8);
+    board->board_put(x, y, color);
+    if (color && board->checkban())
+    {
+        return false;
+    }
+    return true;
 }
 
 bool player_go(BOARD *board, int color)
@@ -419,17 +460,6 @@ bool player_go(BOARD *board, int color)
     return true;
 }
 
-bool computer_go(BOARD *board, int color)
-{
-    int x, y;
-    minmax(board, 1, color, x, y);
-    board->board_put(x, y, color);
-    if (color && board->checkban())
-    {
-        return false;
-    }
-    return true;
-}
 bool go(BOARD *board, int opt, int color)
 {
     if (opt)
