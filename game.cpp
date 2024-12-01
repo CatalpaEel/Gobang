@@ -67,6 +67,10 @@ public:
     }
     int get_color(int x, int y)
     {
+        if (!is_in_board(x, y))
+        {
+            return -2;
+        }
         return board[x][y];
     }
     bool canput(int x, int y)
@@ -147,6 +151,102 @@ public:
         return false;
     }
 
+    bool checkban_element(int x, int y)
+    {
+        const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
+        int three_three = 0;
+        int four_four = 0;
+        for (int i = 0; i < 4; ++i)
+        {
+            int lx, ly, rx, ry;
+            find_adjacent(x, y, fx[i][0], &lx, &ly);
+            find_adjacent(x, y, fx[i][1], &rx, &ry);
+            int len = (i == 1 ? rx - lx - 1 : ry - ly - 1);
+            if (len >= 6)
+            {
+                return true; // XXXXXX
+            }
+            if (len == 4)
+            {
+                if (canput(lx, ly) && (find_next(lx, ly, fx[i][0]), get_color(lx, ly) != 1))
+                {
+                    ++four_four; // O-XXXX
+                }
+                else if (canput(rx, ry) && (find_next(rx, ry, fx[i][1]), get_color(rx, ry) != 1))
+                {
+                    ++four_four; // XXXX-O
+                }
+            }
+            else if (len == 3)
+            {
+                int tx, ty;
+                if (get_color(lx, ly) != 1 && canput(tx = rx, ty = ry) && (find_next(tx, ty, fx[i][1]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][1]), get_color(tx, ty) != 1))
+                {
+                    ++four_four; // OXXX-XO
+                }
+                else if (get_color(rx, ry) != 1 && canput(tx = lx, ty = ly) && (find_next(tx, ty, fx[i][0]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][0]), get_color(tx, ty) != 1))
+                {
+                    ++four_four; // OX-XXXO
+                }
+                if (canput(lx, ly) && canput(rx, ry))
+                {
+                    find_next(lx, ly, fx[i][0]);
+                    find_next(rx, ry, fx[i][1]);
+                    if (canput(lx, ly) && get_color(rx, ry) != 1)
+                    {
+                        ++three_three; // --XXX-O
+                    }
+                    else if (canput(rx, ry) && get_color(lx, ly) != 1)
+                    {
+                        ++three_three; // O-XXX--
+                    }
+                }
+            }
+            else if (len == 2)
+            {
+                int tx, ty;
+                if (get_color(lx, ly) != 1 && canput(tx = rx, ty = ry) && (find_next(tx, ty, fx[i][1]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][1]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][1]), get_color(tx, ty) != 1))
+                {
+                    ++four_four; // OXX-XXO
+                }
+                else if (get_color(rx, ry) != 1 && canput(tx = lx, ty = ly) && (find_next(tx, ty, fx[i][0]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][0]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][0]), get_color(tx, ty) != 1))
+                {
+                    ++four_four; // OXX-XXO
+                }
+                if (canput(lx, ly) && canput(rx, ry))
+                {
+                    find_next(lx, ly, fx[i][0]);
+                    find_next(rx, ry, fx[i][1]);
+                    if (get_color(lx, ly) == 1 && (find_next(lx, ly, fx[i][0]), canput(lx, ly)))
+                    {
+                        ++three_three; // -X-XX-
+                    }
+                    else if (get_color(rx, ry) == 1 && (find_next(rx, ry, fx[i][1]), canput(rx, ry)))
+                    {
+                        ++three_three; // -XX-X-
+                    }
+                }
+            }
+            else if (len == 1)
+            {
+                if (canput(lx, ly) && canput(rx, ry))
+                {
+                    find_next(lx, ly, fx[i][0]);
+                    find_next(rx, ry, fx[i][1]);
+                    if (get_color(lx, ly) == 1 && (find_next(lx, ly, fx[i][0]), get_color(lx, ly) == 1) && (find_next(lx, ly, fx[i][0]), canput(lx, ly)))
+                    {
+                        ++three_three; // -XX-X-
+                    }
+                    else if (get_color(rx, ry == 1) && (find_next(rx, ry, fx[i][1]), get_color(rx, ry) == 1) && (find_next(rx, ry, fx[i][1]), canput(rx, ry)))
+                    {
+                        ++three_three; // -X-XX-
+                    }
+                }
+            }
+        }
+        return three_three >= 2 || four_four >= 2;
+    }
+
     // If it is banned, return true, which means that the black loses the game.
     bool checkban()
     {
@@ -219,15 +319,7 @@ public:
 
 int evaluate_element(BOARD *board, int x, int y)
 {
-
     const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
-
-    int color = board->get_color(x, y);
-    if (color == -1)
-    {
-        return 0;
-    }
-
     const int INF = 1e7;
     const int val_sheet[9] = {
         500, // open four
@@ -240,6 +332,12 @@ int evaluate_element(BOARD *board, int x, int y)
         5,   // sleep two
         5,   // jump two
     };
+
+    int color = board->get_color(x, y);
+    if (color == -1)
+    {
+        return 0;
+    }
 
     int cnt_open_four = 0;
     int cnt_dead_four = 0;
@@ -262,12 +360,12 @@ int evaluate_element(BOARD *board, int x, int y)
         {
             len = rx - lx - 1;
         }
-        switch (len)
+        if (len == 5)
         {
-        case 5:
             return color ? INF : -INF;
-            break;
-        case 4:
+        }
+        else if (len == 4)
+        {
             cnt_canput = board->canput(lx, ly) + board->canput(rx, ry);
             switch (cnt_canput)
             {
@@ -278,8 +376,9 @@ int evaluate_element(BOARD *board, int x, int y)
                 ++cnt_open_four;
                 break;
             }
-            break;
-        case 3:
+        }
+        else if (len == 3)
+        {
             cnt_canput = board->canput(lx, ly) + board->canput(rx, ry);
             if (board->canput(lx, ly))
             {
@@ -300,8 +399,9 @@ int evaluate_element(BOARD *board, int x, int y)
             {
                 ++cnt_sleep_three;
             }
-            break;
-        case 2:
+        }
+        else if (len == 2)
+        {
             cnt_canput = board->canput(lx, ly) + board->canput(rx, ry);
             if (board->canput(lx, ly))
             {
@@ -332,8 +432,9 @@ int evaluate_element(BOARD *board, int x, int y)
             {
                 ++cnt_sleep_two;
             }
-            break;
-        case 1:
+        }
+        else if (len == 1)
+        {
             if (board->canput(lx, ly))
             {
                 switch (board->find_jump(lx, ly, color, (Direction)fx[i][0]))
@@ -361,15 +462,6 @@ int evaluate_element(BOARD *board, int x, int y)
                     break;
                 }
             }
-            break;
-        default: // >=6
-            return -INF;
-            break;
-        }
-
-        if (color && cnt_open_four + cnt_dead_four + cnt_open_three >= 2)
-        {
-            return -INF;
         }
     }
     int sum = 0;
@@ -389,8 +481,13 @@ int evaluate_element(BOARD *board, int x, int y)
     return color ? sum : -sum;
 }
 
-int evaluate(BOARD *board)
+int evaluate(BOARD *board, int x, int y)
 {
+    if (board->get_color(x, y) == 1 && board->checkban_element(x, y))
+    {
+        return -1e7;
+    }
+
     const float P = 1.5;
     int sum[2] = {0, 0}; // {white ,black}
     POSITION *sta;
@@ -419,9 +516,9 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
     const int INF = 1e8;
     if (dep == MAX_DEP)
     {
-        return evaluate(board);
+        return evaluate(board, x, y);
     }
-    int tmp = evaluate(board);
+    int tmp = evaluate(board, x, y);
     if (color && tmp <= -1e7 || !color && tmp >= 1e7)
     {
         return tmp * (MAX_DEP - dep + 1);
@@ -451,7 +548,7 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
                 int tx, ty, val;
                 if (color) // max node
                 {
-                    val = minmax(board, dep + 1, color ^ 1, tx, ty, beta);
+                    val = minmax(board, dep + 1, color ^ 1, tx = i, ty = j, beta);
                     if (val > beta)
                     {
                         beta = val;
@@ -460,7 +557,7 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
                 }
                 else // min node
                 {
-                    val = minmax(board, dep + 1, color ^ 1, tx, ty, alpha);
+                    val = minmax(board, dep + 1, color ^ 1, tx = i, ty = j, alpha);
                     if (val < alpha)
                     {
                         alpha = val;
@@ -487,7 +584,7 @@ bool computer_go(BOARD *board, int color)
     int x, y;
     minmax(board, 1, color, x, y, color ? 1e8 : -1e8);
     board->board_put(x, y, color);
-    if (color && board->checkban())
+    if (color && board->checkban_element(x, y))
     {
         return false;
     }
@@ -496,6 +593,7 @@ bool computer_go(BOARD *board, int color)
 
 bool player_go(BOARD *board, int color)
 {
+    // return computer_go(board, color);
     int x = 0, y = 0;
     while (!board->canput(x, y))
     {
@@ -503,7 +601,7 @@ bool player_go(BOARD *board, int color)
         cin >> x >> y;
     }
     board->board_put(x, y, color);
-    if (color && board->checkban())
+    if (color && board->checkban_element(x, y))
     {
         return false;
     }
