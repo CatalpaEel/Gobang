@@ -12,15 +12,29 @@ enum Direction
     RIGHT_UP,   // 6
     RIGHT_DOWN, // 7
 };
-
+struct POSITION
+{
+    int x, y;
+};
 class BOARD
 {
 private:
-    int board[16][16];
+    int board[n + 1][n + 1];
 
     bool is_in_board(int x, int y)
     {
         return x >= 1 && x <= n && y >= 1 && y <= n;
+    }
+
+    POSITION sta[2][n * n];
+    int sta_top[2] = {0, 0};
+    void add_stack(int x, int y, int color)
+    {
+        sta[color][++sta_top[color]] = (POSITION){x, y};
+    }
+    void pop_stack(int color)
+    {
+        --sta_top[color];
     }
 
 public:
@@ -36,6 +50,14 @@ public:
     }
     void board_put(int x, int y, int color)
     {
+        if (color != -1)
+        {
+            add_stack(x, y, color);
+        }
+        else
+        {
+            pop_stack(board[x][y]);
+        }
         this->board[x][y] = color;
     }
     int get_color(int x, int y)
@@ -45,6 +67,14 @@ public:
     bool canput(int x, int y)
     {
         return is_in_board(x, y) && board[x][y] == -1;
+    }
+    POSITION *get_stack(int color)
+    {
+        return sta[color];
+    }
+    int get_stack_top(int color)
+    {
+        return sta_top[color];
     }
 
     // Go from (x,y) in direction of dir until arrive (resx,resy) which is blank or the other color.
@@ -129,6 +159,10 @@ public:
                 {
                     int lx = i, ly = j, rx, ry;
                     find_next(lx, ly, fx[k][0]); // to avoid repetition
+                    if (is_in_board(lx, ly) && board[lx][ly] == 1)
+                    {
+                        continue;
+                    }
                     find_adjacent(i, j, fx[k][1], &rx, &ry);
                     int len = ry - ly - 1;
                     if (k == 1)
@@ -163,10 +197,10 @@ public:
                 switch (board[i][j])
                 {
                 case 0:
-                    cout << "|○|";
+                    cout << "|X|"; // White
                     break;
                 case 1:
-                    cout << "|●|";
+                    cout << "|O|"; // Black
                     break;
                 default:
                     cout << "|_|";
@@ -191,15 +225,15 @@ int evaluate_element(BOARD *board, int x, int y)
 
     const int INF = 1e7;
     const int val_sheet[9] = {
-        20000,
-        8000,
-        8000,
-        6000,
-        2000,
-        2000,
-        1000,
-        500,
-        500,
+        500, // open four
+        100, // dead four
+        80,  // jump four
+        80,  // open three
+        20,  // sleep three
+        20,  // jump three
+        10,  // open two
+        5,   // sleep two
+        5,   // jump two
     };
 
     int cnt_open_four = 0;
@@ -344,28 +378,52 @@ int evaluate_element(BOARD *board, int x, int y)
         cnt_open_two * val_sheet[6] +
         cnt_sleep_two * val_sheet[7] +
         cnt_jump_two * val_sheet[8];
+
+    sum += x * (n - x) / n + y * (n - y) / n;
+
     return color ? sum : -sum;
 }
 
 int evaluate(BOARD *board)
 {
-    int sum = 0;
-    if (board->checkban())
+    const float P = 1.5;
+    int sum[2] = {0, 0}; // {white ,black}
+    POSITION *sta;
+    int top;
+    for (int color = 0; color < 2; ++color)
     {
-        return -1e7;
-    }
-    for (int i = 1; i <= n; ++i)
-    {
-        for (int j = 1; j <= n; ++j)
+        sta = board->get_stack(color);
+        top = board->get_stack_top(color);
+        for (int i = 1; i <= top; ++i)
         {
-            sum += evaluate_element(board, i, j);
-            if (sum <= -1e7 || sum >= 1e7)
+            int x = sta[i].x, y = sta[i].y;
+            int val = evaluate_element(board, x, y);
+            if (val <= -1e7 || val >= 1e7)
             {
-                return sum;
+                return val;
             }
+            sum[color] += val;
         }
     }
-    return sum;
+    return sum[1] + sum[0];
+    // int sum = 0;
+    // if (board->checkban())
+    // {
+    //     return -1e7;
+    // }
+    // for (int i = 1; i <= n; ++i)
+    // {
+    //     for (int j = 1; j <= n; ++j)
+    //     {
+    //         int t = evaluate_element(board, i, j);
+    //         if (t <= -1e7 || t >= 1e7)
+    //         {
+    //             return t;
+    //         }
+    //         sum += t;
+    //     }
+    // }
+    // return sum;
 }
 
 int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
@@ -375,6 +433,11 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
     if (dep == MAX_DEP)
     {
         return evaluate(board);
+    }
+    int tmp = evaluate(board);
+    if (color && tmp <= -1e7 || !color && tmp >= 1e7)
+    {
+        return tmp * (MAX_DEP - dep + 1);
     }
     int alpha = INF, beta = -INF;
     if (color)
@@ -391,10 +454,6 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
 
         for (int j = 1; j <= n; ++j)
         {
-            if (beta >= alpha)
-            {
-                break;
-            }
             if (board->canput(i, j))
             {
                 if (!x)
@@ -422,6 +481,10 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
                     }
                 }
                 board->board_put(i, j, -1);
+                if (beta >= alpha)
+                {
+                    break;
+                }
             }
         }
         if (beta >= alpha)
@@ -446,18 +509,19 @@ bool computer_go(BOARD *board, int color)
 
 bool player_go(BOARD *board, int color)
 {
-    int x = 0, y = 0;
-    while (!board->canput(x, y))
-    {
-        cout << "Please input the coordinates:";
-        cin >> x >> y;
-    }
-    board->board_put(x, y, color);
-    if (color && board->checkban())
-    {
-        return false;
-    }
-    return true;
+    return computer_go(board, color);
+    // int x = 0, y = 0;
+    // while (!board->canput(x, y))
+    // {
+    //     cout << "Please input the coordinates:";
+    //     cin >> x >> y;
+    // }
+    // board->board_put(x, y, color);
+    // if (color && board->checkban())
+    // {
+    //     return false;
+    // }
+    // return true;
 }
 
 bool go(BOARD *board, int opt, int color)
