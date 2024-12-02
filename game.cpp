@@ -24,11 +24,11 @@ struct POSITION
 class BOARD
 {
 private:
-    int board[n + 1][n + 1];
+    int board[n][n];
 
     bool is_in_board(int x, int y)
     {
-        return x >= 1 && x <= n && y >= 1 && y <= n;
+        return x >= 0 && x < n && y >= 0 && y < n;
     }
 
     POSITION sta[2][n * n];
@@ -45,9 +45,9 @@ private:
 public:
     BOARD()
     {
-        for (int i = 1; i <= n; ++i)
+        for (int i = 0; i < n; ++i)
         {
-            for (int j = 1; j <= n; ++j)
+            for (int j = 0; j < n; ++j)
             {
                 board[i][j] = -1;
             }
@@ -127,9 +127,9 @@ public:
     bool checkwin()
     {
         const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
-        for (int i = 1; i <= n; ++i)
+        for (int i = 0; i < n; ++i)
         {
-            for (int j = 1; j <= n; ++j)
+            for (int j = 0; j < n; ++j)
             {
                 if (board[i][j] == -1)
                 {
@@ -140,11 +140,7 @@ public:
                     int lx, ly, rx, ry;
                     find_adjacent(i, j, fx[k][0], &lx, &ly);
                     find_adjacent(i, j, fx[k][1], &rx, &ry);
-                    int len = ry - ly - 1;
-                    if (k == 1)
-                    {
-                        len = rx - lx - 1;
-                    }
+                    int len = (k == 1 ? rx - lx - 1 : ry - ly - 1);
                     if (len >= 5)
                     {
                         return true;
@@ -256,9 +252,9 @@ public:
     {
         const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
         int cnt = 0;
-        for (int i = 1; i <= n; ++i)
+        for (int i = 0; i < n; ++i)
         {
-            for (int j = 1; j <= n; ++j)
+            for (int j = 0; j < n; ++j)
             {
                 if (board[i][j] != 1)
                 {
@@ -273,11 +269,7 @@ public:
                         continue;
                     }
                     find_adjacent(i, j, fx[k][1], &rx, &ry);
-                    int len = ry - ly - 1;
-                    if (k == 1)
-                    {
-                        len = rx - lx - 1;
-                    }
+                    int len = (k == 1 ? rx - lx - 1 : ry - ly - 1);
                     if (len >= 6)
                     {
                         return true;
@@ -299,9 +291,9 @@ public:
     void printboard()
     {
         cout << "--------------------------" << endl;
-        for (int i = 1; i <= n; ++i)
+        for (int i = 0; i < n; ++i)
         {
-            for (int j = 1; j <= n; ++j)
+            for (int j = 0; j < n; ++j)
             {
                 switch (board[i][j])
                 {
@@ -359,11 +351,7 @@ int evaluate_element(BOARD *board, int x, int y)
         board->find_adjacent(x, y, (Direction)fx[i][0], &lx, &ly);
         board->find_adjacent(x, y, (Direction)fx[i][1], &rx, &ry);
         int cnt_canput;
-        int len = ry - ly - 1;
-        if (i == 1)
-        {
-            len = rx - lx - 1;
-        }
+        int len = (i == 1 ? rx - lx - 1 : ry - ly - 1);
         if (len == 5)
         {
             return color ? INF : -INF;
@@ -480,7 +468,7 @@ int evaluate_element(BOARD *board, int x, int y)
         cnt_sleep_two * val_sheet[7] +
         cnt_jump_two * val_sheet[8];
 
-    sum += x * (n - x) / n + y * (n - y) / n;
+    sum += (x + 1) * (n - x - 1) / n + (y + 1) * (n - y - 1) / n;
 
     return color ? sum : -sum;
 }
@@ -492,7 +480,6 @@ int evaluate(BOARD *board, int tx, int ty)
         return -1e7;
     }
 
-    const float P = 1.5;
     int sum[2] = {0, 0}; // {white ,black}
     POSITION *sta;
     int top;
@@ -518,14 +505,17 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
 {
     const int MAX_DEP = 4;
     const int INF = 1e8;
-    if (dep == MAX_DEP)
+    if (x != -1)
     {
-        return evaluate(board, x, y);
-    }
-    int tmp = evaluate(board, x, y);
-    if (color && tmp <= -1e7 || !color && tmp >= 1e7)
-    {
-        return tmp * (MAX_DEP - dep + 1);
+        if (dep == MAX_DEP)
+        {
+            return evaluate(board, x, y);
+        }
+        int tmp = evaluate(board, x, y);
+        if (color && tmp <= -1e7 || !color && tmp >= 1e7)
+        {
+            return tmp * (MAX_DEP - dep + 1);
+        }
     }
     int alpha = INF, beta = -INF;
     if (color)
@@ -536,15 +526,14 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
     {
         beta = front;
     }
-    x = 0, y = 0;
-    for (int i = 1; i <= n; ++i)
+    x = -1, y = -1;
+    for (int i = 0; i < n; ++i)
     {
-
-        for (int j = 1; j <= n; ++j)
+        for (int j = 0; j < n; ++j)
         {
             if (board->canput(i, j))
             {
-                if (!x)
+                if (x == -1)
                 {
                     x = i, y = j;
                 }
@@ -552,7 +541,8 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
                 int tx, ty, val;
                 if (color) // max node
                 {
-                    val = minmax(board, dep + 1, color ^ 1, tx = i, ty = j, beta);
+                    tx = i, ty = j;
+                    val = minmax(board, dep + 1, color ^ 1, tx, ty, beta);
                     if (val > beta)
                     {
                         beta = val;
@@ -561,7 +551,8 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
                 }
                 else // min node
                 {
-                    val = minmax(board, dep + 1, color ^ 1, tx = i, ty = j, alpha);
+                    tx = i, ty = j;
+                    val = minmax(board, dep + 1, color ^ 1, tx, ty, alpha);
                     if (val < alpha)
                     {
                         alpha = val;
@@ -586,7 +577,7 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
 bool computer_go(BOARD *board, int color)
 {
     int x, y;
-    minmax(board, 1, color, x, y, color ? 1e8 : -1e8);
+    minmax(board, 1, color, x = -1, y = -1, color ? 1e8 : -1e8);
     board->board_put(x, y, color);
     if (color && board->checkban_element(x, y))
     {
@@ -671,13 +662,16 @@ void botzone_play()
     int color = 0; // 0 white; 1 black
     for (int i = 0; i < turnID; i++)
     {
-        if (i == 0 && input["requests"][i]["x"].asInt() == -1)
+        if (i == 0)
         {
-            color = 1;
-        }
-        else
-        {
-            color = 0;
+            if (input["requests"][i]["x"].asInt() == -1)
+            {
+                color = 1;
+            }
+            else
+            {
+                color = 0;
+            }
         }
         board->board_put(input["requests"][i]["x"].asInt(), input["requests"][i]["y"].asInt(), color ^ 1);
         board->board_put(input["responses"][i]["x"].asInt(), input["responses"][i]["y"].asInt(), color);
@@ -690,7 +684,7 @@ void botzone_play()
     if (!board->checkwin())
     {
         int x, y;
-        minmax(board, 1, color, x, y, color ? 1e8 : -1e8);
+        minmax(board, 1, color, x = -1, y = -1, color ? 1e8 : -1e8);
         Json::Value action;
         action["x"] = x;
         action["y"] = y;
@@ -703,5 +697,5 @@ void botzone_play()
 
 int main()
 {
-    play();
+    botzone_play();
 }
