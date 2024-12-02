@@ -55,6 +55,10 @@ public:
     }
     void board_put(int x, int y, int color)
     {
+        if (!is_in_board(x, y))
+        {
+            return;
+        }
         if (color != -1)
         {
             add_stack(x, y, color);
@@ -481,9 +485,9 @@ int evaluate_element(BOARD *board, int x, int y)
     return color ? sum : -sum;
 }
 
-int evaluate(BOARD *board, int x, int y)
+int evaluate(BOARD *board, int tx, int ty)
 {
-    if (board->get_color(x, y) == 1 && board->checkban_element(x, y))
+    if (board->get_color(tx, ty) == 1 && board->checkban_element(tx, ty))
     {
         return -1e7;
     }
@@ -593,19 +597,19 @@ bool computer_go(BOARD *board, int color)
 
 bool player_go(BOARD *board, int color)
 {
-    // return computer_go(board, color);
-    int x = 0, y = 0;
-    while (!board->canput(x, y))
-    {
-        cout << "Please input the coordinates:";
-        cin >> x >> y;
-    }
-    board->board_put(x, y, color);
-    if (color && board->checkban_element(x, y))
-    {
-        return false;
-    }
-    return true;
+    return computer_go(board, color);
+    // int x = 0, y = 0;
+    // while (!board->canput(x, y))
+    // {
+    //     cout << "Please input the coordinates:";
+    //     cin >> x >> y;
+    // }
+    // board->board_put(x, y, color);
+    // if (color && board->checkban_element(x, y))
+    // {
+    //     return false;
+    // }
+    // return true;
 }
 
 bool go(BOARD *board, int opt, int color)
@@ -653,47 +657,49 @@ void play()
     }
 }
 
-// void botzone_play()
-// {
-//     string str;
-//     getline(cin, str);
-//     Json::Reader reader;
-//     Json::Value input;
-//     reader.parse(str, input);
-//     int turnID = input["responses"].size();
-//     BOARD *board = new BOARD();
+void botzone_play()
+{
+    string str;
+    getline(cin, str);
+    Json::Reader reader;
+    Json::Value input;
+    reader.parse(str, input);
+    int turnID = input["responses"].size();
+    BOARD *board = new BOARD();
 
-//     // rebuild the board
-//     int color = (input["requests"][0]["x"].asInt() == -1); // 0 white; 1 black
-//     for (int i = 0; i < turnID; i++)
-//     {
-//         board->board_put(input["requests"][i]["x"].asInt(), input["requests"][i]["y"].asInt(), color ^ 1);
-//         board->board_put(input["responses"][i]["x"].asInt(), input["responses"][i]["y"].asInt(), color);
-//     }
-//     board->board_put(input["requests"][turnID]["x"].asInt(), input["requests"][turnID]["y"].asInt(), color ^ 1);
+    // rebuild the board
+    int color = 0; // 0 white; 1 black
+    for (int i = 0; i < turnID; i++)
+    {
+        if (i == 0 && input["requests"][i]["x"].asInt() == -1)
+        {
+            color = 1;
+        }
+        else
+        {
+            color = 0;
+        }
+        board->board_put(input["requests"][i]["x"].asInt(), input["requests"][i]["y"].asInt(), color ^ 1);
+        board->board_put(input["responses"][i]["x"].asInt(), input["responses"][i]["y"].asInt(), color);
+    }
+    board->board_put(input["requests"][turnID]["x"].asInt(), input["requests"][turnID]["y"].asInt(), color ^ 1);
 
-//     // calculate the action
-//     Json::Value ret;
+    // calculate the action
+    Json::Value ret;
 
-//     if (input["requests"][0]["x"].asInt() > 0 && turnID == 1)
-//     {
-//         Json::Value action;
-//         action["x"] = -1;
-//         action["y"] = -1;
-//         ret["response"] = action;
-//     }
-//     else
-//     {
-//         int x, y;
-//         minmax(board, 1, color, x, y, color ? 1e8 : -1e8);
-//         Json::Value action;
-//         action["x"] = x;
-//         action["y"] = y;
-//         ret["response"] = action;
-//     }
-//     Json::FastWriter writer;
-//     cout << writer.write(ret) << endl;
-// }
+    if (!board->checkwin())
+    {
+        int x, y;
+        minmax(board, 1, color, x, y, color ? 1e8 : -1e8);
+        Json::Value action;
+        action["x"] = x;
+        action["y"] = y;
+        ret["response"] = action;
+    }
+
+    Json::FastWriter writer;
+    cout << writer.write(ret) << endl;
+}
 
 int main()
 {
