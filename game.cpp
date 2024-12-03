@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+#include <algorithm>
 #include "jsoncpp/json.h"
 
 using namespace std;
@@ -23,6 +24,14 @@ enum Direction
 struct POSITION
 {
     int x, y;
+    bool operator<(const POSITION &pos) const
+    {
+        if (x == pos.x)
+        {
+            return y < pos.y;
+        }
+        return x < pos.x;
+    }
 };
 class BOARD
 {
@@ -86,6 +95,10 @@ public:
     {
         return sta_top[color];
     }
+    bool full()
+    {
+        return sta_top[0] + sta_top[1] >= n * n;
+    }
 
     // Go from (x,y) in direction of dir until arrive (resx,resy) which is blank or the other color.
     void find_adjacent(int x, int y, Direction dir, int *resx, int *resy)
@@ -138,7 +151,10 @@ public:
                     find_adjacent(i, j, fx[k][0], &lx, &ly);
                     find_adjacent(i, j, fx[k][1], &rx, &ry);
                     int len = (k == 1 ? rx - lx - 1 : ry - ly - 1);
-                    return len >= 5;
+                    if (len >= 5)
+                    {
+                        return true;
+                    }
                 }
             }
         }
@@ -455,28 +471,43 @@ int evaluate(BOARD *board, int tx, int ty)
 
 int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
 {
-    const int MAX_DEP = 4;
+    const int MAX_DEP = 5;
+    const int MAX_CHILD = 50;
     const int INF = 1e8;
+
     if (x != -1)
     {
         if (dep >= MAX_DEP)
         {
             return evaluate(board, x, y);
         }
-        int tmp = evaluate(board, x, y);
-        if (color && tmp <= -1e7 || !color && tmp >= 1e7) // color absolutely lose
+        if (1.0 * (clock() - START_TIME) / CLOCKS_PER_SEC > 0.9) // time breaker
         {
-            return tmp * (MAX_DEP - dep + 1);
-        }
-        if (color && tmp >= 1e7 || !color && tmp <= -1e7) // color absolutely win
-        {
-            return tmp * (MAX_DEP - dep + 1);
-        }
-        if (1.0 * (clock() - START_TIME) / CLOCKS_PER_SEC > 0.9)
-        {
-            return tmp;
+            return evaluate(board, x, y);
         }
     }
+
+    pair<int, POSITION> sta[n * n];
+    int top = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        for (int j = 0; j < n; ++j)
+        {
+            if (board->canput(i, j))
+            {
+                board->board_put(i, j, color);
+                int val = evaluate(board, i, j) * (MAX_DEP - dep + 1);
+                board->board_remove(i, j);
+                if (color && val >= 1e7 || !color && val <= -1e7)
+                {
+                    x = i, y = j;
+                    return val;
+                }
+                sta[++top] = make_pair(color ? -val : val, (POSITION){i, j});
+            }
+        }
+    }
+    sort(sta + 1, sta + top + 1);
 
     int alpha = INF, beta = -INF;
     if (color)
@@ -487,51 +518,45 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
     {
         beta = front;
     }
+
     x = -1, y = -1;
-    for (int i = 0; i < n; ++i)
+    top = min(top, MAX_CHILD);
+    for (int k = 1; k <= top; ++k)
     {
-        for (int j = 0; j < n; ++j)
+        int i = sta[k].second.x, j = sta[k].second.y;
+        if (x == -1)
         {
-            if (board->canput(i, j))
+            x = i, y = j;
+        }
+        board->board_put(i, j, color);
+        int tx, ty, val;
+        if (color) // max node
+        {
+            tx = i, ty = j;
+            val = minmax(board, dep + 1, color ^ 1, tx, ty, beta);
+            if (val > beta)
             {
-                if (x == -1)
-                {
-                    x = i, y = j;
-                }
-                board->board_put(i, j, color);
-                int tx, ty, val;
-                if (color) // max node
-                {
-                    tx = i, ty = j;
-                    val = minmax(board, dep + 1, color ^ 1, tx, ty, beta);
-                    if (val > beta)
-                    {
-                        beta = val;
-                        x = i, y = j;
-                    }
-                }
-                else // min node
-                {
-                    tx = i, ty = j;
-                    val = minmax(board, dep + 1, color ^ 1, tx, ty, alpha);
-                    if (val < alpha)
-                    {
-                        alpha = val;
-                        x = i, y = j;
-                    }
-                }
-                board->board_remove(i, j);
-                if (beta >= alpha)
-                {
-                    break;
-                }
+                beta = val;
+                x = i, y = j;
             }
         }
+        else // min node
+        {
+            tx = i, ty = j;
+            val = minmax(board, dep + 1, color ^ 1, tx, ty, alpha);
+            if (val < alpha)
+            {
+                alpha = val;
+                x = i, y = j;
+            }
+        }
+        board->board_remove(i, j);
         if (beta >= alpha)
         {
             break;
         }
     }
+
     return color ? beta : alpha;
 }
 
@@ -584,6 +609,11 @@ void play()
     bool flag;
     while (!board->checkwin())
     {
+        if (board->full())
+        {
+            cout << "Drawn game" << endl;
+            return;
+        }
         ++cnt;
         if (cnt & 1)
         {
