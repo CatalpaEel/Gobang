@@ -2,10 +2,13 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <ctime>
 #include "jsoncpp/json.h"
 
 using namespace std;
 const int n = 15;
+clock_t START_TIME;
+
 enum Direction
 {
     LEFT,       // 0
@@ -53,20 +56,14 @@ public:
             }
         }
     }
+    void board_remove(int x, int y)
+    {
+        pop_stack(board[x][y]);
+        this->board[x][y] = -1;
+    }
     void board_put(int x, int y, int color)
     {
-        if (!is_in_board(x, y))
-        {
-            return;
-        }
-        if (color != -1)
-        {
-            add_stack(x, y, color);
-        }
-        else
-        {
-            pop_stack(board[x][y]);
-        }
+        add_stack(x, y, color);
         this->board[x][y] = color;
     }
     int get_color(int x, int y)
@@ -141,17 +138,14 @@ public:
                     find_adjacent(i, j, fx[k][0], &lx, &ly);
                     find_adjacent(i, j, fx[k][1], &rx, &ry);
                     int len = (k == 1 ? rx - lx - 1 : ry - ly - 1);
-                    if (len >= 5)
-                    {
-                        return true;
-                    }
+                    return len >= 5;
                 }
             }
         }
         return false;
     }
 
-    bool checkban_element(int x, int y)
+    bool checkban(int x, int y)
     {
         const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
         int three_three = 0;
@@ -247,47 +241,6 @@ public:
         return three_three >= 2 || four_four >= 2;
     }
 
-    // If it is banned, return true, which means that the black loses the game.
-    bool checkban()
-    {
-        const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
-        int cnt = 0;
-        for (int i = 0; i < n; ++i)
-        {
-            for (int j = 0; j < n; ++j)
-            {
-                if (board[i][j] != 1)
-                {
-                    continue;
-                }
-                for (int k = 0; k < 4; ++k)
-                {
-                    int lx = i, ly = j, rx, ry;
-                    find_next(lx, ly, fx[k][0]); // to avoid repetition
-                    if (is_in_board(lx, ly) && board[lx][ly] == 1)
-                    {
-                        continue;
-                    }
-                    find_adjacent(i, j, fx[k][1], &rx, &ry);
-                    int len = (k == 1 ? rx - lx - 1 : ry - ly - 1);
-                    if (len >= 6)
-                    {
-                        return true;
-                    }
-                    else if (len == 4 && (canput(lx, ly) || canput(rx, ry)))
-                    {
-                        ++cnt;
-                    }
-                    else if (len == 3 && canput(lx, ly) && canput(rx, ry))
-                    {
-                        ++cnt;
-                    }
-                }
-            }
-        }
-        return cnt >= 2;
-    }
-
     void printboard()
     {
         cout << "--------------------------" << endl;
@@ -359,14 +312,13 @@ int evaluate_element(BOARD *board, int x, int y)
         else if (len == 4)
         {
             cnt_canput = board->canput(lx, ly) + board->canput(rx, ry);
-            switch (cnt_canput)
+            if (cnt_canput == 2)
             {
-            case 1:
-                ++cnt_dead_four;
-                break;
-            case 2:
                 ++cnt_open_four;
-                break;
+            }
+            else if (cnt_canput == 1)
+            {
+                ++cnt_dead_four;
             }
         }
         else if (len == 3)
@@ -475,12 +427,12 @@ int evaluate_element(BOARD *board, int x, int y)
 
 int evaluate(BOARD *board, int tx, int ty)
 {
-    if (board->get_color(tx, ty) == 1 && board->checkban_element(tx, ty))
+    if (board->get_color(tx, ty) == 1 && board->checkban(tx, ty))
     {
         return -1e7;
     }
 
-    int sum[2] = {0, 0}; // {white ,black}
+    int sum = 0; // {white ,black}
     POSITION *sta;
     int top;
     for (int color = 0; color < 2; ++color)
@@ -495,10 +447,10 @@ int evaluate(BOARD *board, int tx, int ty)
             {
                 return val;
             }
-            sum[color] += val;
+            sum += val;
         }
     }
-    return sum[1] + sum[0];
+    return sum;
 }
 
 int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
@@ -507,16 +459,25 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
     const int INF = 1e8;
     if (x != -1)
     {
-        if (dep == MAX_DEP)
+        if (dep >= MAX_DEP)
         {
             return evaluate(board, x, y);
         }
         int tmp = evaluate(board, x, y);
-        if (color && tmp <= -1e7 || !color && tmp >= 1e7)
+        if (color && tmp <= -1e7 || !color && tmp >= 1e7) // color absolutely lose
         {
             return tmp * (MAX_DEP - dep + 1);
         }
+        if (color && tmp >= 1e7 || !color && tmp <= -1e7) // color absolutely win
+        {
+            return tmp * (MAX_DEP - dep + 1);
+        }
+        if (1.0 * (clock() - START_TIME) / CLOCKS_PER_SEC > 0.9)
+        {
+            return tmp;
+        }
     }
+
     int alpha = INF, beta = -INF;
     if (color)
     {
@@ -559,7 +520,7 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
                         x = i, y = j;
                     }
                 }
-                board->board_put(i, j, -1);
+                board->board_remove(i, j);
                 if (beta >= alpha)
                 {
                     break;
@@ -579,7 +540,7 @@ bool computer_go(BOARD *board, int color)
     int x, y;
     minmax(board, 1, color, x = -1, y = -1, color ? 1e8 : -1e8);
     board->board_put(x, y, color);
-    if (color && board->checkban_element(x, y))
+    if (color && board->checkban(x, y))
     {
         return false;
     }
@@ -596,7 +557,7 @@ bool player_go(BOARD *board, int color)
     //     cin >> x >> y;
     // }
     // board->board_put(x, y, color);
-    // if (color && board->checkban_element(x, y))
+    // if (color && board->checkban(x, y))
     // {
     //     return false;
     // }
@@ -650,6 +611,7 @@ void play()
 
 void botzone_play()
 {
+    START_TIME = clock();
     string str;
     getline(cin, str);
     Json::Reader reader;
@@ -660,19 +622,23 @@ void botzone_play()
 
     // rebuild the board
     int color = 0; // 0 white; 1 black
-    for (int i = 0; i < turnID; i++)
+    if (turnID > 0)
     {
-        if (i == 0)
+        int i = 0;
+        if (input["requests"][i]["x"].asInt() == -1)
         {
-            if (input["requests"][i]["x"].asInt() == -1)
-            {
-                color = 1;
-            }
-            else
-            {
-                color = 0;
-            }
+            color = 1;
         }
+        else
+        {
+            color = 0;
+            board->board_put(input["requests"][i]["x"].asInt(), input["requests"][i]["y"].asInt(), color ^ 1);
+        }
+        board->board_put(input["responses"][i]["x"].asInt(), input["responses"][i]["y"].asInt(), color);
+    }
+    for (int i = 1; i < turnID; i++)
+    {
+
         board->board_put(input["requests"][i]["x"].asInt(), input["requests"][i]["y"].asInt(), color ^ 1);
         board->board_put(input["responses"][i]["x"].asInt(), input["responses"][i]["y"].asInt(), color);
     }
