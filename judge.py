@@ -55,5 +55,3 @@ for i in range(20):
     for j in range(15):
         print(''.join(''.join(board[j])))
 
-for i in range(len(time_all)):
-    print(i,time_all[i])

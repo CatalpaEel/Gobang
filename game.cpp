@@ -282,6 +282,11 @@ public:
     }
 };
 
+bool check_overtime()
+{
+    return 1.0 * (clock() - START_TIME) / CLOCKS_PER_SEC > 0.9;
+}
+
 int evaluate_element(BOARD *board, int x, int y)
 {
     const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
@@ -441,20 +446,22 @@ int evaluate_element(BOARD *board, int x, int y)
     return color ? sum : -sum;
 }
 
-int evaluate(BOARD *board, int tx, int ty)
+int evaluate(BOARD *board, int tx, int ty, int color)
 {
+    const float P = 1.5; // defense rate
+
     if (board->get_color(tx, ty) == 1 && board->checkban(tx, ty))
     {
         return -1e7;
     }
 
-    int sum = 0; // {white ,black}
+    int sum[2] = {0, 0}; // {white ,black}
     POSITION *sta;
     int top;
-    for (int color = 0; color < 2; ++color)
+    for (int k = 0; k < 2; ++k)
     {
-        sta = board->get_stack(color);
-        top = board->get_stack_top(color);
+        sta = board->get_stack(k);
+        top = board->get_stack_top(k);
         for (int i = 1; i <= top; ++i)
         {
             int x = sta[i].x, y = sta[i].y;
@@ -463,10 +470,11 @@ int evaluate(BOARD *board, int tx, int ty)
             {
                 return val;
             }
-            sum += val;
+            sum[k] += val;
         }
     }
-    return sum;
+    sum[color ^ 1] *= P;
+    return sum[0] + sum[1];
 }
 
 int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
@@ -479,11 +487,11 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
     {
         if (dep >= MAX_DEP)
         {
-            return evaluate(board, x, y);
+            return evaluate(board, x, y, color ^ 1);
         }
-        if (1.0 * (clock() - START_TIME) / CLOCKS_PER_SEC > 0.9) // time breaker
+        if (check_overtime()) // time breaker
         {
-            return evaluate(board, x, y);
+            return evaluate(board, x, y, color ^ 1);
         }
     }
 
@@ -496,7 +504,7 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
             if (board->canput(i, j))
             {
                 board->board_put(i, j, color);
-                int val = evaluate(board, i, j) * (MAX_DEP - dep + 1);
+                int val = evaluate(board, i, j, color) * (MAX_DEP - dep + 1);
                 board->board_remove(i, j);
                 if (color && val >= 1e7 || !color && val <= -1e7)
                 {
