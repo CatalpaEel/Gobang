@@ -11,7 +11,7 @@ board=[['-' for i in range(n)] for j in range(n)]
 black_message = {"requests":[{"x":-1,"y":-1}],"responses":[]}
 white_message = {"requests":[],"responses":[]}
 
-for i in range(20):
+for i in range(1000):
     t=time.time()
 
     result = subprocess.run("game.exe", input=json.dumps(black_message), capture_output=True, text=True)
@@ -19,7 +19,7 @@ for i in range(20):
 
     result = json.loads(result)
 
-    if "response" == None:
+    if result == None:
         break
     put = result["response"]
     black_message["responses"].append(put)
@@ -29,7 +29,7 @@ for i in range(20):
     delta_time=time.time()-t
     time_all.append(delta_time)
     print(2*i-1,"time:",delta_time);
-
+    
     print(result)
     for j in range(15):
         print(''.join(''.join(board[j])))

@@ -284,6 +284,7 @@ public:
 
 bool check_overtime()
 {
+    // return false;
     return 1.0 * (clock() - START_TIME) / CLOCKS_PER_SEC > 0.9;
 }
 
@@ -292,15 +293,15 @@ int evaluate_element(BOARD *board, int x, int y)
     const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
     const int INF = 1e7;
     const int val_sheet[9] = {
-        500, // open four
-        100, // dead four
-        80,  // jump four
-        80,  // open three
-        20,  // sleep three
-        20,  // jump three
-        10,  // open two
-        5,   // sleep two
-        5,   // jump two
+        5000, // open four
+        1000, // dead four
+        800,  // jump four
+        800,  // open three
+        20,   // sleep three
+        20,   // jump three
+        20,   // open two
+        5,    // sleep two
+        5,    // jump two
     };
 
     int color = board->get_color(x, y);
@@ -326,7 +327,7 @@ int evaluate_element(BOARD *board, int x, int y)
         board->find_adjacent(x, y, (Direction)fx[i][1], &rx, &ry);
         int cnt_canput;
         int len = (i == 1 ? rx - lx - 1 : ry - ly - 1);
-        if (len == 5)
+        if (len >= 5)
         {
             return color ? INF : -INF;
         }
@@ -429,7 +430,12 @@ int evaluate_element(BOARD *board, int x, int y)
             }
         }
     }
+
     int sum = 0;
+    if (cnt_open_three + cnt_dead_four + cnt_jump_four >= 2 || cnt_open_four)
+    {
+        sum = 10000;
+    }
     sum =
         cnt_open_four * val_sheet[0] +
         cnt_dead_four * val_sheet[1] +
@@ -440,7 +446,6 @@ int evaluate_element(BOARD *board, int x, int y)
         cnt_open_two * val_sheet[6] +
         cnt_sleep_two * val_sheet[7] +
         cnt_jump_two * val_sheet[8];
-
     sum += (x + 1) * (n - x - 1) / n + (y + 1) * (n - y - 1) / n;
 
     return color ? sum : -sum;
@@ -480,7 +485,7 @@ int evaluate(BOARD *board, int tx, int ty, int color)
 int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
 {
     const int MAX_DEP = 5;
-    const int MAX_CHILD = 50;
+    const int MAX_CHILD = 30;
     const int INF = 1e8;
 
     if (x != -1)
@@ -583,18 +588,18 @@ bool computer_go(BOARD *board, int color)
 bool player_go(BOARD *board, int color)
 {
     return computer_go(board, color);
-    // int x = 0, y = 0;
-    // while (!board->canput(x, y))
-    // {
-    //     cout << "Please input the coordinates:";
-    //     cin >> x >> y;
-    // }
-    // board->board_put(x, y, color);
-    // if (color && board->checkban(x, y))
-    // {
-    //     return false;
-    // }
-    // return true;
+    int x = -1, y = -1;
+    while (!board->canput(x, y))
+    {
+        cout << "Please input the coordinates:";
+        cin >> x >> y;
+    }
+    board->board_put(x, y, color);
+    if (color && board->checkban(x, y))
+    {
+        return false;
+    }
+    return true;
 }
 
 bool go(BOARD *board, int opt, int color)
