@@ -1,14 +1,24 @@
-#include <iostream>
-#include <string>
-#include <vector>
-#include <cstdlib>
 #include <ctime>
 #include <algorithm>
 #include "jsoncpp/json.h"
 
+#ifndef UNICODE
+#define UNICODE
+#endif
+
+#ifdef BOTZONE
+#include <iostream>
+#endif
+
+#ifndef BOTZONE
+#include <windows.h>
+#include <windowsx.h>
+#include <d2d1.h>
+#endif
+
 using namespace std;
 const int n = 15;
-clock_t START_TIME;
+clock_t START_TIME = 0;
 
 enum Direction
 {
@@ -64,6 +74,18 @@ public:
                 board[i][j] = -1;
             }
         }
+    }
+    BOARD *copy()
+    {
+        BOARD *tmp = new BOARD();
+        for (int color = 0; color <= 1; ++color)
+        {
+            for (int i = 1; i <= sta_top[color]; ++i)
+            {
+                tmp->board_put(sta[color][i].x, sta[color][i].y, color);
+            }
+        }
+        return tmp;
     }
     void board_remove(int x, int y)
     {
@@ -256,35 +278,14 @@ public:
         }
         return three_three >= 2 || four_four >= 2;
     }
-
-    void printboard()
-    {
-        cout << "--------------------------" << endl;
-        for (int i = 0; i < n; ++i)
-        {
-            for (int j = 0; j < n; ++j)
-            {
-                switch (board[i][j])
-                {
-                case 0:
-                    cout << "|X|"; // White
-                    break;
-                case 1:
-                    cout << "|O|"; // Black
-                    break;
-                default:
-                    cout << "|_|";
-                    break;
-                }
-            }
-            cout << endl;
-        }
-    }
 };
 
 bool check_overtime()
 {
-    // return false;
+    if (START_TIME == 0)
+    {
+        return false;
+    }
     return 1.0 * (clock() - START_TIME) / CLOCKS_PER_SEC > 0.9;
 }
 
@@ -293,12 +294,12 @@ int evaluate_element(BOARD *board, int x, int y)
     const Direction fx[4][2] = {{LEFT, RIGHT}, {UP, DOWN}, {LEFT_UP, RIGHT_DOWN}, {LEFT_DOWN, RIGHT_UP}};
     const int INF = 1e7;
     const int val_sheet[9] = {
-        5000, // open four
+        1000, // open four
         1000, // dead four
         800,  // jump four
         800,  // open three
-        20,   // sleep three
-        20,   // jump three
+        50,   // sleep three
+        100,  // jump three
         20,   // open two
         5,    // sleep two
         5,    // jump two
@@ -484,8 +485,8 @@ int evaluate(BOARD *board, int tx, int ty, int color)
 
 int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
 {
-    const int MAX_DEP = 5;
-    const int MAX_CHILD = 30;
+    const int MAX_DEP = 6;
+    const int MAX_CHILD = 20;
     const int INF = 1e8;
 
     if (x != -1)
@@ -573,84 +574,7 @@ int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
     return color ? beta : alpha;
 }
 
-bool computer_go(BOARD *board, int color)
-{
-    int x, y;
-    minmax(board, 1, color, x = -1, y = -1, color ? 1e8 : -1e8);
-    board->board_put(x, y, color);
-    if (color && board->checkban(x, y))
-    {
-        return false;
-    }
-    return true;
-}
-
-bool player_go(BOARD *board, int color)
-{
-    return computer_go(board, color);
-    int x = -1, y = -1;
-    while (!board->canput(x, y))
-    {
-        cout << "Please input the coordinates:";
-        cin >> x >> y;
-    }
-    board->board_put(x, y, color);
-    if (color && board->checkban(x, y))
-    {
-        return false;
-    }
-    return true;
-}
-
-bool go(BOARD *board, int opt, int color)
-{
-    if (opt)
-    {
-        return player_go(board, color);
-    }
-    else
-    {
-        return computer_go(board, color);
-    }
-}
-void play()
-{
-    BOARD *board = new BOARD();
-    board->printboard();
-    int black = 1, white = black ^ 1;
-    int cnt = 0;
-    bool flag;
-    while (!board->checkwin())
-    {
-        if (board->full())
-        {
-            cout << "Drawn game" << endl;
-            return;
-        }
-        ++cnt;
-        if (cnt & 1)
-        {
-            flag = go(board, black, 1);
-        }
-        else
-        {
-            flag = go(board, white, 0);
-        }
-        board->printboard();
-        if (!flag)
-        {
-            break;
-        }
-    }
-    if (flag ^ (cnt & 1))
-    {
-        cout << "White win!" << endl;
-    }
-    else
-    {
-        cout << "Black win" << endl;
-    }
-}
+#ifdef BOTZONE
 
 void botzone_play()
 {
@@ -704,7 +628,476 @@ void botzone_play()
     cout << writer.write(ret) << endl;
 }
 
-int main()
+#endif
+
+#ifndef BOTZONE
+
+struct ComputerGoINFO
 {
-    botzone_play();
+    BOARD *board;
+    int colorComputer;
+    bool *isPlayerTurn;
+    int *gameOver;
+    HWND window;
+    ComputerGoINFO(BOARD *board, int colorComputer, bool *isPlayerTurn, int *gameOver, HWND window)
+    {
+        this->board = board;
+        this->colorComputer = colorComputer;
+        this->isPlayerTurn = isPlayerTurn;
+        this->gameOver = gameOver;
+        this->window = window;
+    }
+};
+
+DWORD WINAPI ComputerGo(LPVOID lPThreadParameter)
+{
+    ComputerGoINFO *pINFO = (ComputerGoINFO *)lPThreadParameter;
+
+    int x, y;
+    START_TIME = clock();
+    minmax(pINFO->board->copy(), 1, pINFO->colorComputer, x = -1, y = -1, pINFO->colorComputer ? 1e8 : -1e8);
+    pINFO->board->board_put(x, y, pINFO->colorComputer);
+
+    if (pINFO->colorComputer && pINFO->board->checkban(x, y))
+    {
+        *pINFO->gameOver = 0; // White win
+    }
+    if (pINFO->board->checkwin())
+    {
+        *pINFO->gameOver = pINFO->colorComputer;
+    }
+    else if (pINFO->board->full())
+    {
+        *pINFO->gameOver = 2;
+    }
+
+    *pINFO->isPlayerTurn = true;
+    InvalidateRect(pINFO->window, NULL, FALSE);
+    return 0;
 }
+
+template <class DERIVED_TYPE>
+class BaseWindow
+{
+public:
+    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+    {
+        DERIVED_TYPE *pThis = NULL;
+
+        if (uMsg == WM_NCCREATE)
+        {
+            CREATESTRUCT *pCreate = (CREATESTRUCT *)lParam;
+            pThis = (DERIVED_TYPE *)pCreate->lpCreateParams;
+            SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pThis);
+
+            pThis->m_hwnd = hwnd;
+        }
+        else
+        {
+            pThis = (DERIVED_TYPE *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+        }
+        if (pThis)
+        {
+            return pThis->HandleMessage(uMsg, wParam, lParam);
+        }
+        else
+        {
+            return DefWindowProc(hwnd, uMsg, wParam, lParam);
+        }
+    }
+
+    BaseWindow() : m_hwnd(NULL) {}
+
+    BOOL Create(
+        PCWSTR lpWindowName,
+        DWORD dwStyle,
+        DWORD dwExStyle = 0,
+        int x = CW_USEDEFAULT,
+        int y = CW_USEDEFAULT,
+        int nWidth = CW_USEDEFAULT,
+        int nHeight = CW_USEDEFAULT,
+        HWND hWndParent = 0,
+        HMENU hMenu = 0)
+    {
+        WNDCLASS wc = {0};
+
+        wc.lpfnWndProc = DERIVED_TYPE::WindowProc;
+        wc.hInstance = GetModuleHandle(NULL);
+        wc.lpszClassName = ClassName();
+        wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+
+        RegisterClass(&wc);
+
+        m_hwnd = CreateWindowEx(
+            dwExStyle,
+            ClassName(),
+            lpWindowName,
+            dwStyle,
+            x, y, nWidth, nHeight,
+            hWndParent,
+            hMenu,
+            GetModuleHandle(NULL),
+            this);
+
+        return (m_hwnd ? TRUE : FALSE);
+    }
+
+    HWND Window() const { return m_hwnd; }
+
+protected:
+    virtual PCWSTR ClassName() const = 0;
+    virtual LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) = 0;
+
+    HWND m_hwnd;
+};
+
+template <class T>
+void SafeRelease(T **ppT)
+{
+    if (*ppT)
+    {
+        (*ppT)->Release();
+        *ppT = NULL;
+    }
+}
+
+class MainWindow : public BaseWindow<MainWindow>
+{
+    ID2D1Factory *pFactory;
+    ID2D1HwndRenderTarget *pRenderTarget;
+    ID2D1SolidColorBrush *pBrush;
+    float gridStartX, gridStartY, gridEndX, gridEndY, gridGap;
+    int placedX, placedY;
+    BOARD *board;
+    int colorPlayer, colorComputer;
+    bool isPlayerTurn;
+    int gameOver;
+
+    void CalculateLayout();
+    HRESULT CreateGraphicsResources();
+    void DiscardGraphicsResources();
+    void OnPaint();
+    void Resize();
+    void OnMouseMove(LPARAM lParam);
+    void OnLButtonUp(LPARAM lParam);
+    bool ScreenToBoardPosition(int &x, int &y);
+    bool BoardToScreenPosition(int &x, int &y);
+    void ComputerGoCoroutine();
+
+public:
+    MainWindow() : pFactory(NULL), pRenderTarget(NULL), pBrush(NULL)
+    {
+        board = new BOARD();
+        colorPlayer = 1;
+        colorComputer = 0;
+        gameOver = -1;
+        if (colorPlayer)
+        {
+            isPlayerTurn = true;
+        }
+        else
+        {
+            isPlayerTurn = false;
+            ComputerGoCoroutine();
+        }
+    }
+
+    PCWSTR ClassName() const { return L"Renju Window Class"; }
+    LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam);
+};
+
+void MainWindow::ComputerGoCoroutine()
+{
+    ComputerGoINFO *pINFO = new ComputerGoINFO(board, colorComputer, &isPlayerTurn, &gameOver, Window());
+    HANDLE hThread = CreateThread(NULL, 0, ComputerGo, pINFO, 0, 0);
+    CloseHandle(hThread);
+}
+
+bool MainWindow::ScreenToBoardPosition(int &x, int &y)
+{
+    x = 1.0 * (x - gridStartX) / gridGap + 0.5;
+    y = 1.0 * (y - gridStartY) / gridGap + 0.5;
+    if (x < 0 || x >= n || y < 0 || y >= n)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool MainWindow::BoardToScreenPosition(int &x, int &y)
+{
+    if (x < 0 || x >= n || y < 0 || y >= n)
+    {
+        return false;
+    }
+    x = gridStartX + x * gridGap;
+    y = gridStartY + y * gridGap;
+    return true;
+}
+
+void MainWindow::OnLButtonUp(LPARAM lParam) // PlayerGo
+{
+    if (!isPlayerTurn || gameOver != -1)
+    {
+        return;
+    }
+
+    int x = GET_X_LPARAM(lParam);
+    int y = GET_Y_LPARAM(lParam);
+    ScreenToBoardPosition(x, y);
+    placedX = x;
+    placedY = y;
+
+    if (board->canput(x, y))
+    {
+        board->board_put(x, y, 1);
+        InvalidateRect(Window(), NULL, FALSE);
+        isPlayerTurn = false;
+
+        if (colorPlayer && board->checkban(x, y))
+        {
+            gameOver = 0; // White win
+        }
+        if (board->checkwin())
+        {
+            gameOver = colorPlayer;
+        }
+        else if (board->full())
+        {
+            gameOver = 2;
+        }
+
+        if (gameOver == -1)
+        {
+            ComputerGoCoroutine();
+        }
+    }
+}
+
+void MainWindow::OnMouseMove(LPARAM lParam)
+{
+    if (!isPlayerTurn || gameOver != -1)
+    {
+        return;
+    }
+    int x = GET_X_LPARAM(lParam);
+    int y = GET_Y_LPARAM(lParam);
+    ScreenToBoardPosition(x, y);
+
+    if (placedX != x || placedY != y)
+    {
+        InvalidateRect(Window(), NULL, FALSE);
+    }
+    placedX = x;
+    placedY = y;
+}
+
+// Recalculate drawing layout when the size of the window changes.
+void MainWindow::CalculateLayout()
+{
+    if (pRenderTarget != NULL)
+    {
+        D2D1_SIZE_F size = pRenderTarget->GetSize();
+        const float cx = size.width / 2;
+        const float cy = size.height / 2;
+        const float x = size.width / 2.2;
+        const float y = size.height / 2.2;
+        const float a = x < y ? x : y;
+        gridStartX = cx - a;
+        gridStartY = cy - a;
+        gridEndX = cx + a;
+        gridEndY = cy + a;
+        gridGap = a * 2 / (n - 1);
+    }
+}
+
+HRESULT MainWindow::CreateGraphicsResources()
+{
+    HRESULT hr = S_OK;
+    if (pRenderTarget == NULL)
+    {
+        RECT rc;
+        GetClientRect(m_hwnd, &rc);
+
+        D2D1_SIZE_U size = D2D1::SizeU(rc.right, rc.bottom);
+
+        hr = pFactory->CreateHwndRenderTarget(
+            D2D1::RenderTargetProperties(),
+            D2D1::HwndRenderTargetProperties(m_hwnd, size),
+            &pRenderTarget);
+
+        if (SUCCEEDED(hr))
+        {
+            const D2D1_COLOR_F color = D2D1::ColorF(D2D1::ColorF::Black);
+            hr = pRenderTarget->CreateSolidColorBrush(color, &pBrush);
+
+            if (SUCCEEDED(hr))
+            {
+                CalculateLayout();
+            }
+        }
+    }
+    return hr;
+}
+
+void MainWindow::DiscardGraphicsResources()
+{
+    SafeRelease(&pRenderTarget);
+    SafeRelease(&pBrush);
+}
+
+void MainWindow::OnPaint()
+{
+    HRESULT hr = CreateGraphicsResources();
+    if (SUCCEEDED(hr))
+    {
+        PAINTSTRUCT ps;
+        BeginPaint(m_hwnd, &ps);
+
+        pRenderTarget->BeginDraw();
+
+        pRenderTarget->Clear(D2D1::ColorF(0xF8B77F)); // Background color
+
+        // Draw chess board
+        pBrush->SetColor(D2D1::ColorF(0, 0, 0));
+        for (int i = 0; i < n; ++i)
+        {
+            pRenderTarget->DrawLine(D2D1::Point2F(gridStartX + i * gridGap, gridStartY), D2D1::Point2F(gridStartX + i * gridGap, gridEndY), pBrush);
+            pRenderTarget->DrawLine(D2D1::Point2F(gridStartX, gridStartY + i * gridGap), D2D1::Point2F(gridEndX, gridStartY + i * gridGap), pBrush);
+        }
+
+        // Draw chess
+        int x, y;
+        for (int color = 0; color <= 1; ++color)
+        {
+            if (color)
+            {
+                pBrush->SetColor(D2D1::ColorF(0, 0, 0));
+            }
+            else
+            {
+                pBrush->SetColor(D2D1::ColorF(1, 1, 1));
+            }
+
+            POSITION *sta = board->get_stack(color);
+            int top = board->get_stack_top(color);
+            for (int i = 1; i <= top; ++i)
+            {
+                x = sta[i].x;
+                y = sta[i].y;
+                BoardToScreenPosition(x, y);
+                pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), gridGap * 0.4, gridGap * 0.4), pBrush);
+            }
+        }
+
+        // Stress the last chess
+
+        pBrush->SetColor(D2D1::ColorF(0, 1, 0));
+        POSITION *sta = board->get_stack(isPlayerTurn ^ colorPlayer);
+        int top = board->get_stack_top(isPlayerTurn ^ colorPlayer);
+        if (top)
+        {
+            x = sta[top].x;
+            y = sta[top].y;
+            BoardToScreenPosition(x, y);
+            pRenderTarget->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), gridGap * 0.41, gridGap * 0.41), pBrush);
+        }
+
+        // Draw next predicted chess
+        if (isPlayerTurn && gameOver == -1)
+        {
+            x = placedX, y = placedY;
+            printf("%d %d\n", x, y);
+            if (board->canput(x, y) && BoardToScreenPosition(x, y))
+            {
+                pBrush->SetColor(D2D1::ColorF(0, 0, 0, 0.5));
+                pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), gridGap * 0.4, gridGap * 0.4), pBrush);
+            }
+        }
+
+        hr = pRenderTarget->EndDraw();
+        if (FAILED(hr) || hr == D2DERR_RECREATE_TARGET)
+        {
+            DiscardGraphicsResources();
+        }
+        EndPaint(m_hwnd, &ps);
+    }
+}
+
+void MainWindow::Resize()
+{
+    if (pRenderTarget != NULL)
+    {
+        RECT rc;
+        GetClientRect(m_hwnd, &rc);
+
+        D2D1_SIZE_U size = D2D1::SizeU(rc.right, rc.bottom);
+
+        pRenderTarget->Resize(size);
+        CalculateLayout();
+        InvalidateRect(m_hwnd, NULL, FALSE);
+    }
+}
+
+LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    switch (uMsg)
+    {
+    case WM_CREATE:
+        if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &pFactory)))
+        {
+            return -1; // Fail CreateWindowEx.
+        }
+        return 0;
+
+    case WM_DESTROY:
+        DiscardGraphicsResources();
+        SafeRelease(&pFactory);
+        PostQuitMessage(0);
+        return 0;
+
+    case WM_PAINT:
+        OnPaint();
+        return 0;
+
+    case WM_SIZE:
+        Resize();
+        return 0;
+
+    case WM_MOUSEMOVE:
+        OnMouseMove(lParam);
+        return 0;
+
+    case WM_LBUTTONUP:
+        OnLButtonUp(lParam);
+        return 0;
+    }
+
+    return DefWindowProc(m_hwnd, uMsg, wParam, lParam);
+}
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCmdLine, int nCmdShow)
+{
+    MainWindow win;
+
+    if (!win.Create(L"Renju-Official", WS_OVERLAPPEDWINDOW))
+    {
+        return 0;
+    }
+
+    ShowWindow(win.Window(), nCmdShow);
+    UpdateWindow(win.Window());
+
+    // Run the message loop.
+
+    MSG msg = {};
+    while (GetMessage(&msg, NULL, 0, 0))
+    {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+
+    return 0;
+}
+
+#endif

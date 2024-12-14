@@ -10,7 +10,8 @@
                 "${file}",
                 "-o",
                 "${fileDirname}\\${fileBasenameNoExtension}.exe",
-                "-O2"
+                "-O2",
+                "D:/mingw64/x86_64-w64-mingw32/lib/libd2d1.a"
             ],
             "options": {
                 "cwd": "${fileDirname}"
