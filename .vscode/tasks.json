@@ -11,6 +11,8 @@
                 "-o",
                 "${fileDirname}\\${fileBasenameNoExtension}.exe",
                 "-O2",
+                "-static-libgcc",
+                "-static-libstdc++",
                 "D:/mingw64/x86_64-w64-mingw32/lib/libd2d1.a"
             ],
             "options": {
