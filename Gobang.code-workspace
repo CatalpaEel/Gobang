@@ -9,7 +9,8 @@
 			"ostream": "cpp",
 			"iostream": "cpp",
 			"*.tcc": "cpp",
-			"new": "cpp"
+			"new": "cpp",
+			"fstream": "cpp"
 		}
 	}
 }

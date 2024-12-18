@@ -14,6 +14,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <d2d1.h>
+#include <fstream>
 #endif
 
 using namespace std;
@@ -754,6 +755,8 @@ class MainWindow : public BaseWindow<MainWindow>
     void GamePaint();
     void MenuPaint();
     void GameInit();
+    void SaveData();
+    void ReadData();
 
 public:
     MainWindow() : pFactory(NULL), pRenderTarget(NULL), pBrush(NULL)
@@ -765,6 +768,41 @@ public:
     PCWSTR ClassName() const { return L"Gobang Window Class"; }
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam);
 };
+
+// Save and read data
+
+void MainWindow::SaveData()
+{
+    ofstream fout("data", ios::out | ios::binary);
+    while (!isPlayerTurn)
+    {
+    }
+    fout.write((char *)&*board, sizeof(*board));
+    fout.write((char *)&isPlayerTurn, sizeof(isPlayerTurn));
+    fout.write((char *)&colorPlayer, sizeof(colorPlayer));
+    fout.write((char *)&colorComputer, sizeof(colorComputer));
+    fout.write((char *)&gameOver, sizeof(gameOver));
+    fout.close();
+}
+void MainWindow::ReadData()
+{
+    ifstream fin("data", ios::in | ios::binary);
+    if (!fin)
+    {
+        return;
+    }
+    if (board != NULL)
+    {
+        delete board;
+    }
+    board = new BOARD();
+    fin.read((char *)&*board, sizeof(*board));
+    fin.read((char *)&isPlayerTurn, sizeof(isPlayerTurn));
+    fin.read((char *)&colorPlayer, sizeof(colorPlayer));
+    fin.read((char *)&colorComputer, sizeof(colorComputer));
+    fin.read((char *)&gameOver, sizeof(gameOver));
+    fin.close();
+}
 
 // Computer go
 
@@ -1097,7 +1135,6 @@ void MainWindow::OnPaint()
 // GameInit
 void MainWindow::GameInit()
 {
-
     if (board != NULL)
     {
         delete board;
@@ -1129,6 +1166,7 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
         {
             return -1; // Fail CreateWindowEx.
         }
+        ReadData();
         hwndButton[0] = CreateWindow(
             L"Button",
             L"NewGame",
@@ -1139,7 +1177,7 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
             L"Button",
             L"Quit",
             WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_FLAT | BS_TEXT,
-            300, 300, 120, 40,
+            300, 500, 120, 40,
             m_hwnd, (HMENU)1002, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
         hwndButton[2] = CreateWindow(
             L"Button",
@@ -1151,7 +1189,7 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
             L"Button",
             L"ContinueGame",
             WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_FLAT | BS_TEXT,
-            0, 0, 0, 0,
+            300, 300, 120, 40,
             m_hwnd, (HMENU)1004, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
         return 0;
 
@@ -1167,6 +1205,7 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
             GameInit();
             break;
         case 1002: // Quit
+            SaveData();
             DiscardGraphicsResources();
             SafeRelease(&pFactory);
             PostQuitMessage(0);
@@ -1205,6 +1244,7 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
         return 0;
 
     case WM_DESTROY:
+        SaveData();
         DiscardGraphicsResources();
         SafeRelease(&pFactory);
         PostQuitMessage(0);
