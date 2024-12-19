@@ -262,6 +262,15 @@ public:
             }
             else if (len == 1)
             {
+                int tx, ty;
+                if (get_color(lx, ly) != 1 && canput(tx = rx, ty = ry) && (find_next(tx, ty, fx[i][1]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][1]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][1]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][1]), get_color(tx, ty) != 1))
+                {
+                    ++four_four; // OX-XXXO
+                }
+                else if (get_color(rx, ry) != 1 && canput(tx = lx, ty = ly) && (find_next(tx, ty, fx[i][0]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][0]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][0]), get_color(tx, ty) == 1) && (find_next(tx, ty, fx[i][0]), get_color(tx, ty) != 1))
+                {
+                    ++four_four; // OXXX-XO
+                }
                 if (canput(lx, ly) && canput(rx, ry))
                 {
                     find_next(lx, ly, fx[i][0]);
@@ -300,7 +309,7 @@ int evaluate_element(BOARD *board, int x, int y)
         800,  // jump four
         800,  // open three
         50,   // sleep three
-        100,  // jump three
+        200,  // jump three
         20,   // open two
         5,    // sleep two
         5,    // jump two
@@ -455,7 +464,7 @@ int evaluate_element(BOARD *board, int x, int y)
 
 int evaluate(BOARD *board, int tx, int ty, int color)
 {
-    const float P = 1.5; // defense rate
+    const float P = 1.2; // defense rate
 
     if (board->get_color(tx, ty) == 1 && board->checkban(tx, ty))
     {
@@ -486,8 +495,8 @@ int evaluate(BOARD *board, int tx, int ty, int color)
 
 int minmax(BOARD *board, int dep, int color, int &x, int &y, int front)
 {
-    const int MAX_DEP = 6;
-    const int MAX_CHILD = 20;
+    const int MAX_DEP = 5;
+    const int MAX_CHILD = 30;
     const int INF = 1e8;
 
     if (x != -1)
@@ -725,7 +734,12 @@ void SafeRelease(T **ppT)
 
 class MainWindow : public BaseWindow<MainWindow>
 {
-    HWND hwndButton[5];
+    struct Button
+    {
+        HWND hwndButton;
+        int x, y, nWidth, nHeight;
+    };
+    map<int, Button> Buttons;
     ID2D1Factory *pFactory;
     ID2D1HwndRenderTarget *pRenderTarget;
     ID2D1SolidColorBrush *pBrush;
@@ -754,9 +768,11 @@ class MainWindow : public BaseWindow<MainWindow>
     void PlayerGo(int x, int y);
     void GamePaint();
     void MenuPaint();
-    void GameInit();
+    void GameInit(int player);
     void SaveData();
-    void ReadData();
+    bool ReadData();
+    void CreateButton(int index, PCWSTR buttonName, int x, int y, int nWidth, int nHeight, LPARAM lParam);
+    void ButtonOn(int index, bool isON);
 
 public:
     MainWindow() : pFactory(NULL), pRenderTarget(NULL), pBrush(NULL)
@@ -784,12 +800,12 @@ void MainWindow::SaveData()
     fout.write((char *)&gameOver, sizeof(gameOver));
     fout.close();
 }
-void MainWindow::ReadData()
+bool MainWindow::ReadData()
 {
     ifstream fin("data", ios::in | ios::binary);
     if (!fin)
     {
-        return;
+        return false;
     }
     if (board != NULL)
     {
@@ -802,6 +818,7 @@ void MainWindow::ReadData()
     fin.read((char *)&colorComputer, sizeof(colorComputer));
     fin.read((char *)&gameOver, sizeof(gameOver));
     fin.close();
+    return true;
 }
 
 // Computer go
@@ -1083,7 +1100,14 @@ void MainWindow::GamePaint()
             printf("%d %d\n", x, y);
             if (board->canput(x, y) && BoardToScreenPosition(x, y))
             {
-                pBrush->SetColor(D2D1::ColorF(0, 0, 0, 0.5)); // Semi-transparent color
+                if (colorPlayer)
+                {
+                    pBrush->SetColor(D2D1::ColorF(0, 0, 0, 0.5)); // Semi-transparent black
+                }
+                else
+                {
+                    pBrush->SetColor(D2D1::ColorF(1, 1, 1, 0.5)); // Semi-transparent white
+                }
                 pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), gridGap * 0.4, gridGap * 0.4), pBrush);
             }
         }
@@ -1133,15 +1157,15 @@ void MainWindow::OnPaint()
 }
 
 // GameInit
-void MainWindow::GameInit()
+void MainWindow::GameInit(int player)
 {
     if (board != NULL)
     {
         delete board;
     }
     board = new BOARD();
-    colorPlayer = 1;
-    colorComputer = 0;
+    colorPlayer = player;
+    colorComputer = player ^ 1;
     gameOver = -1;
     if (colorPlayer)
     {
@@ -1155,6 +1179,30 @@ void MainWindow::GameInit()
     InvalidateRect(m_hwnd, NULL, FALSE);
 }
 
+// Button
+void MainWindow::CreateButton(int index, PCWSTR buttonName, int x, int y, int nWidth, int nHeight, LPARAM lParam)
+{
+    HWND hwndButton = CreateWindow(
+        L"Button",
+        buttonName,
+        WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_FLAT | BS_TEXT,
+        0, 0, 0, 0,
+        m_hwnd, (HMENU)index, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
+    Buttons[index] = (Button){hwndButton, x, y, nWidth, nHeight};
+}
+void MainWindow::ButtonOn(int index, bool isOn)
+{
+    Button button = Buttons[index];
+    if (isOn)
+    {
+        MoveWindow(button.hwndButton, button.x, button.y, button.nWidth, button.nHeight, TRUE);
+    }
+    else
+    {
+        MoveWindow(button.hwndButton, 0, 0, 0, 0, TRUE);
+    }
+}
+
 // Basic
 
 LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -1166,63 +1214,50 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
         {
             return -1; // Fail CreateWindowEx.
         }
-        ReadData();
-        hwndButton[0] = CreateWindow(
-            L"Button",
-            L"NewGame",
-            WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_FLAT | BS_TEXT,
-            300, 100, 120, 40,
-            m_hwnd, (HMENU)1001, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
-        hwndButton[1] = CreateWindow(
-            L"Button",
-            L"Quit",
-            WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_FLAT | BS_TEXT,
-            300, 500, 120, 40,
-            m_hwnd, (HMENU)1002, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
-        hwndButton[2] = CreateWindow(
-            L"Button",
-            L"ReturnMenu",
-            WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_FLAT | BS_TEXT,
-            0, 0, 0, 0,
-            m_hwnd, (HMENU)1003, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
-        hwndButton[3] = CreateWindow(
-            L"Button",
-            L"ContinueGame",
-            WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_FLAT | BS_TEXT,
-            300, 300, 120, 40,
-            m_hwnd, (HMENU)1004, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
+        CreateButton(0, L"NewGame", 300, 100, 120, 40, lParam);
+        CreateButton(1, L"ContinueGame", 300, 300, 120, 40, lParam);
+        CreateButton(2, L"Quit", 300, 500, 120, 40, lParam);
+        CreateButton(3, L"Black", 300, 100, 120, 40, lParam);
+        CreateButton(4, L"White", 300, 300, 120, 40, lParam);
+        CreateButton(5, L"ReturnMenu", 900, 300, 120, 40, lParam);
+        ButtonOn(3, false), ButtonOn(4, false), ButtonOn(5, false);
+        ButtonOn(0, true), ButtonOn(1, ReadData()), ButtonOn(2, true);
         return 0;
 
     case WM_COMMAND:
         switch (LOWORD(wParam))
         {
-        case 1001: // NewGame
-            currentState = STATE::Game;
-            MoveWindow(hwndButton[0], 0, 0, 0, 0, TRUE);
-            MoveWindow(hwndButton[1], 0, 0, 0, 0, TRUE);
-            MoveWindow(hwndButton[2], 900, 300, 120, 40, TRUE);
-            MoveWindow(hwndButton[3], 0, 0, 0, 0, TRUE);
-            GameInit();
+        case 0: // NewGame
+            ButtonOn(0, false), ButtonOn(1, false), ButtonOn(2, false), ButtonOn(5, false);
+            ButtonOn(3, true), ButtonOn(4, true);
             break;
-        case 1002: // Quit
+        case 1: // ContinueGame
+            currentState = STATE::Game;
+            ButtonOn(0, false), ButtonOn(1, false), ButtonOn(2, false), ButtonOn(3, false), ButtonOn(4, false);
+            ButtonOn(5, true);
+            break;
+        case 2: // Quit
             SaveData();
             DiscardGraphicsResources();
             SafeRelease(&pFactory);
             PostQuitMessage(0);
             break;
-        case 1003: // ReturnMenu
-            currentState = STATE::Menu;
-            MoveWindow(hwndButton[0], 300, 100, 120, 40, TRUE);
-            MoveWindow(hwndButton[1], 300, 500, 120, 40, TRUE);
-            MoveWindow(hwndButton[2], 0, 0, 0, 0, TRUE);
-            MoveWindow(hwndButton[3], 300, 300, 120, 40, TRUE);
-            break;
-        case 1004: // ContinueGame
+        case 3: // Black
             currentState = STATE::Game;
-            MoveWindow(hwndButton[0], 0, 0, 0, 0, TRUE);
-            MoveWindow(hwndButton[1], 0, 0, 0, 0, TRUE);
-            MoveWindow(hwndButton[2], 900, 300, 120, 40, TRUE);
-            MoveWindow(hwndButton[3], 0, 0, 0, 0, TRUE);
+            ButtonOn(0, false), ButtonOn(1, false), ButtonOn(2, false), ButtonOn(3, false), ButtonOn(4, false);
+            ButtonOn(5, true);
+            GameInit(1);
+            break;
+        case 4: // White
+            currentState = STATE::Game;
+            ButtonOn(0, false), ButtonOn(1, false), ButtonOn(2, false), ButtonOn(3, false), ButtonOn(4, false);
+            ButtonOn(5, true);
+            GameInit(0);
+            break;
+        case 5: // ReturnMenu
+            currentState = STATE::Menu;
+            ButtonOn(3, false), ButtonOn(4, false), ButtonOn(5, false);
+            ButtonOn(0, true), ButtonOn(1, true), ButtonOn(2, true);
             break;
         }
         return 0;
