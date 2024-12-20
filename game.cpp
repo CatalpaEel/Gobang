@@ -14,6 +14,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <d2d1.h>
+#include <dwrite.h>
 #include <fstream>
 #endif
 
@@ -737,23 +738,28 @@ class MainWindow : public BaseWindow<MainWindow>
     struct Button
     {
         HWND hwndButton;
-        int x, y, nWidth, nHeight;
+        float x, y, nWidth, nHeight;
+        bool isOn;
     };
     map<int, Button> Buttons;
+    HWND textBox;
     ID2D1Factory *pFactory;
+    IDWriteFactory *pWriteFactory;
+    IDWriteTextFormat *pTextFormat;
     ID2D1HwndRenderTarget *pRenderTarget;
     ID2D1SolidColorBrush *pBrush;
+    int screenW, screenH;
     float gridStartX, gridStartY, gridEndX, gridEndY, gridGap;
     int placedX, placedY;
     BOARD *board;
     int colorPlayer, colorComputer;
+    bool isPlayerTurn;
+    int gameOver;
     enum STATE
     {
         Menu,
         Game,
     } currentState;
-    bool isPlayerTurn;
-    int gameOver;
 
     void CalculateLayout();
     HRESULT CreateGraphicsResources();
@@ -771,8 +777,9 @@ class MainWindow : public BaseWindow<MainWindow>
     void GameInit(int player);
     void SaveData();
     bool ReadData();
-    void CreateButton(int index, PCWSTR buttonName, int x, int y, int nWidth, int nHeight, LPARAM lParam);
+    void CreateButton(int index, PCWSTR buttonName, float x, float y, float nWidth, float nHeight, LPARAM lParam);
     void ButtonOn(int index, bool isON);
+    void ResizeButton(int index);
 
 public:
     MainWindow() : pFactory(NULL), pRenderTarget(NULL), pBrush(NULL)
@@ -973,6 +980,8 @@ void MainWindow::CalculateLayout()
     if (pRenderTarget != NULL)
     {
         D2D1_SIZE_F size = pRenderTarget->GetSize();
+        screenW = size.width;
+        screenH = size.height;
         const float cx = size.width / 2;
         const float cy = size.height / 2;
         const float a = (cx < cy ? cx : cy) / 1.1;
@@ -995,6 +1004,11 @@ void MainWindow::Resize()
 
         pRenderTarget->Resize(size);
         CalculateLayout();
+
+        for (int i = 0; i < Buttons.size(); ++i)
+        {
+            ResizeButton(i);
+        }
 
         InvalidateRect(m_hwnd, NULL, FALSE);
     }
@@ -1035,6 +1049,9 @@ void MainWindow::DiscardGraphicsResources()
 {
     SafeRelease(&pRenderTarget);
     SafeRelease(&pBrush);
+    SafeRelease(&pTextFormat);
+    SafeRelease(&pWriteFactory);
+    SafeRelease(&pFactory);
 }
 
 void MainWindow::GamePaint()
@@ -1043,7 +1060,7 @@ void MainWindow::GamePaint()
     if (SUCCEEDED(hr))
     {
         PAINTSTRUCT ps;
-        BeginPaint(m_hwnd, &ps);
+        HDC hdc = BeginPaint(m_hwnd, &ps);
 
         pRenderTarget->BeginDraw();
 
@@ -1097,7 +1114,6 @@ void MainWindow::GamePaint()
         if (isPlayerTurn && gameOver == -1)
         {
             x = placedX, y = placedY;
-            printf("%d %d\n", x, y);
             if (board->canput(x, y) && BoardToScreenPosition(x, y))
             {
                 if (colorPlayer)
@@ -1110,6 +1126,32 @@ void MainWindow::GamePaint()
                 }
                 pRenderTarget->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), gridGap * 0.4, gridGap * 0.4), pBrush);
             }
+        }
+
+        if (gameOver != -1)
+        {
+
+            RECT textRect;
+            GetClientRect(m_hwnd, &textRect);
+            pBrush->SetColor(D2D1::ColorF(0, 0, 0));
+            if (gameOver == 0)
+            {
+                pRenderTarget->DrawTextW(L"White win!", 11, pTextFormat, D2D1::RectF(0, 0, screenW, screenH), pBrush);
+            }
+            else if (gameOver == 1)
+            {
+                pRenderTarget->DrawTextW(L"Black win!", 11, pTextFormat, D2D1::RectF(0, 0, screenW, screenH), pBrush);
+            }
+            else if (gameOver == 2)
+            {
+                pRenderTarget->DrawTextW(L"Full!", 6, pTextFormat, D2D1::RectF(0, 0, screenW, screenH), pBrush);
+            }
+        }
+
+        // Paint button
+        for (int i = 0; i < Buttons.size(); ++i)
+        {
+            InvalidateRect(Buttons[i].hwndButton, NULL, FALSE);
         }
 
         hr = pRenderTarget->EndDraw();
@@ -1132,6 +1174,12 @@ void MainWindow::MenuPaint()
         pRenderTarget->BeginDraw();
 
         pRenderTarget->Clear(D2D1::ColorF(0xF8B77F)); // Background color
+
+        // Paint button
+        for (int i = 0; i < Buttons.size(); ++i)
+        {
+            InvalidateRect(Buttons[i].hwndButton, NULL, FALSE);
+        }
 
         hr = pRenderTarget->EndDraw();
         if (FAILED(hr) || hr == D2DERR_RECREATE_TARGET)
@@ -1180,7 +1228,7 @@ void MainWindow::GameInit(int player)
 }
 
 // Button
-void MainWindow::CreateButton(int index, PCWSTR buttonName, int x, int y, int nWidth, int nHeight, LPARAM lParam)
+void MainWindow::CreateButton(int index, PCWSTR buttonName, float x, float y, float nWidth, float nHeight, LPARAM lParam)
 {
     HWND hwndButton = CreateWindow(
         L"Button",
@@ -1188,21 +1236,31 @@ void MainWindow::CreateButton(int index, PCWSTR buttonName, int x, int y, int nW
         WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_FLAT | BS_TEXT,
         0, 0, 0, 0,
         m_hwnd, (HMENU)index, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
-    Buttons[index] = (Button){hwndButton, x, y, nWidth, nHeight};
+    SetWindowPos(hwndButton, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    Buttons[index] = (Button){hwndButton, x, y, nWidth, nHeight, false};
 }
 void MainWindow::ButtonOn(int index, bool isOn)
 {
-    Button button = Buttons[index];
+    Button &button = Buttons[index];
+    button.isOn = isOn;
     if (isOn)
     {
-        MoveWindow(button.hwndButton, button.x, button.y, button.nWidth, button.nHeight, TRUE);
+        MoveWindow(button.hwndButton, button.x * screenW, button.y * screenH, button.nWidth * screenW, button.nHeight * screenH, TRUE);
     }
     else
     {
         MoveWindow(button.hwndButton, 0, 0, 0, 0, TRUE);
     }
 }
-
+void MainWindow::ResizeButton(int index)
+{
+    Button button = Buttons[index];
+    if (button.isOn)
+    {
+        MoveWindow(button.hwndButton, button.x * screenW, button.y * screenH, button.nWidth * screenW, button.nHeight * screenH, TRUE);
+        printf("%d", button.x * screenW);
+    }
+}
 // Basic
 
 LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -1214,12 +1272,29 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
         {
             return -1; // Fail CreateWindowEx.
         }
-        CreateButton(0, L"NewGame", 300, 100, 120, 40, lParam);
-        CreateButton(1, L"ContinueGame", 300, 300, 120, 40, lParam);
-        CreateButton(2, L"Quit", 300, 500, 120, 40, lParam);
-        CreateButton(3, L"Black", 300, 100, 120, 40, lParam);
-        CreateButton(4, L"White", 300, 300, 120, 40, lParam);
-        CreateButton(5, L"ReturnMenu", 900, 300, 120, 40, lParam);
+        if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(pWriteFactory), reinterpret_cast<IUnknown **>(&pWriteFactory))))
+        {
+            return -1;
+        }
+        if (FAILED(pWriteFactory->CreateTextFormat(
+                L"Verdana",
+                NULL,
+                DWRITE_FONT_WEIGHT_NORMAL,
+                DWRITE_FONT_STYLE_NORMAL,
+                DWRITE_FONT_STRETCH_NORMAL,
+                50,
+                L"", // locale
+                &pTextFormat)))
+        {
+            return -1;
+        }
+        CreateGraphicsResources();
+        CreateButton(0, L"NewGame", 0.2, 0.1, 0.1, 0.05, lParam);
+        CreateButton(1, L"ContinueGame", 0.2, 0.3, 0.1, 0.05, lParam);
+        CreateButton(2, L"Quit", 0.2, 0.5, 0.1, 0.05, lParam);
+        CreateButton(3, L"Black", 0.2, 0.1, 0.1, 0.05, lParam);
+        CreateButton(4, L"White", 0.2, 0.3, 0.1, 0.05, lParam);
+        CreateButton(5, L"ReturnMenu", 0.8, 0.4, 0.1, 0.05, lParam);
         ButtonOn(3, false), ButtonOn(4, false), ButtonOn(5, false);
         ButtonOn(0, true), ButtonOn(1, ReadData()), ButtonOn(2, true);
         return 0;
@@ -1239,7 +1314,6 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
         case 2: // Quit
             SaveData();
             DiscardGraphicsResources();
-            SafeRelease(&pFactory);
             PostQuitMessage(0);
             break;
         case 3: // Black
@@ -1281,7 +1355,6 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:
         SaveData();
         DiscardGraphicsResources();
-        SafeRelease(&pFactory);
         PostQuitMessage(0);
         return 0;
     }
@@ -1293,7 +1366,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR pCmdLine, int nCmdShow)
 {
     MainWindow win;
 
-    if (!win.Create(L"Gobang", WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME))
+    if (!win.Create(L"Gobang", WS_OVERLAPPEDWINDOW))
     {
         return 0;
     }
