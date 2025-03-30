@@ -1,6 +1,6 @@
 # 五子棋大作业
 
-北京大学大一计算概论（A）2024年秋大作业。使用minmax搜索和alpha-beta剪枝实现AI，并使用Win32编程实现图形化界面。
+计算概论（A）2024年秋大作业。使用minmax搜索和alpha-beta剪枝实现AI，并使用Win32编程实现图形化界面。
 
 The project of Introduction to Computing (A) 2024 for freshman students at Peking University. Implement AI using minmax search and alpha beta pruning, and implement a graphical interface using Win32 programming.
 
